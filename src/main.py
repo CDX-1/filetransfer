@@ -5,6 +5,7 @@ import os
 from client import Client
 from server import Server
 
+
 class Logger:
     def __init__(self, model):
         self.model = model
@@ -13,36 +14,38 @@ class Logger:
     def log(self, message):
         self.logs.append(message)
         self.model.setStringList(self.logs)
-        
+
     def error(self, message):
         self.logs.append(f'[ERR]: {message}')
         self.model.setStringList(self.logs)
+
 
 def upload_files(host, port, parent=None, logger=None):
     if not host or not port:
         logger.error("Host and port are required")
         return
-    
+
     try:
         int(port)
     except ValueError:
         logger.error("Port must be an integer")
         return
-        
+
     files, _ = QtWidgets.QFileDialog.getOpenFileNames(
         parent,
         "Select files to upload",
         "",
         "All Files (*.*)"
     )
-    
+
     if not files:
         logger.error("No files selected")
         return
-        
+
     logger.log(f"Connecting to {host}:{port}")
     client = Client(host, port, logger)
     client.send_files(files)
+
 
 def select_directory(parent=None):
     directory = QtWidgets.QFileDialog.getExistingDirectory(
@@ -53,27 +56,29 @@ def select_directory(parent=None):
     )
     return directory
 
+
 def start_server(port, dropbox_dir, parent=None, logger=None):
     if not port:
         logger.error("Port is required")
         return
-        
+
     try:
         int(port)
     except ValueError:
         logger.error("Port must be an integer")
         return
-        
+
     if not dropbox_dir:
         logger.error("Dropbox directory is required")
         return
-        
+
     if not os.path.exists(dropbox_dir):
         logger.error("Dropbox directory does not exist")
         return
-        
+
     server = Server(port, dropbox_dir, logger)
     server.start()
+
 
 class Ui_MainWindow():
     def setupUi(self, MainWindow):
@@ -146,7 +151,7 @@ class Ui_MainWindow():
         self.logs_model = QtCore.QStringListModel()
         self.logs.setModel(self.logs_model)
         self.logger = Logger(self.logs_model)
-        
+
         self.retranslateUi(MainWindow)
         self.tabs.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
@@ -159,8 +164,8 @@ class Ui_MainWindow():
         self.upload.setText(_translate("MainWindow", "Upload files"))
         self.upload.clicked.connect(
             lambda: upload_files(
-                self.hostEdit.text(), 
-                self.portEdit.text(), 
+                self.hostEdit.text(),
+                self.portEdit.text(),
                 MainWindow,
                 self.logger
             )
@@ -181,7 +186,8 @@ class Ui_MainWindow():
         )
         self.dropboxLabel.setText(_translate("MainWindow", "Dropbox Directory"))
         self.tabs.setTabText(self.tabs.indexOf(self.server), _translate("MainWindow", "Server"))
-        
+
+
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = QtWidgets.QMainWindow()
