@@ -25,7 +25,7 @@ class Client:
                     filesize = os.path.getsize(path)
                     filename = os.path.basename(path)
 
-                    header = f"{filename}{SEPARATOR}{filesize}\n"
+                    header = f"{filename}{SEPARATOR}{filesize}"
                     s.send(header.encode())
 
                     with open(path, "rb") as f:
@@ -38,7 +38,7 @@ class Client:
 
                 s.send("DONE".encode())
                 self.main.log(f"Successfully uploaded {count}/{len(files)} files")
-        except ConnectionResetError:
+        except ConnectionRefusedError:
             self.main.error(f"Failed to connect to {self.host}:{self.port}")
         except Exception as e:
             self.main.error(str(e))
