@@ -1,197 +1,225 @@
 from PyQt6 import QtCore, QtWidgets
-import sys
-import os
+from PyQt6.QtWidgets import QFileDialog
+import asyncio
 
-from client import Client
-from server import Server
+from src.client import Client
+from src.server import Server
 
+# User interface generated using Qt Designer
+class ui_main_window(object):
+    def __init__(self):
+        self.central = None
+        self.grid_layout = None
+        self.tabs = None
+        self.client_tab = None
+        self.client_grid_layout = None
+        self.client_grid = None
+        self.address_grid = None
+        self.client_port_label = None
+        self.client_host_edit = None
+        self.client_port_edit = None
+        self.client_host_label = None
+        self.upload_button = None
+        self.server_tab = None
+        self.server_grid_layout = None
+        self.server_grid = None
+        self.dropbox_grid = None
+        self.server_button = None
+        self.server_port_edit = None
+        self.dropbox_label = None
+        self.dropbox_edit = None
+        self.dropbox_button = None
+        self.server_port_label = None
+        self.logs = None
+        self.logs_model = None
+        self.internal_logs = []
+        self.server = Server(self)
 
-class Logger:
-    def __init__(self, model):
-        self.model = model
-        self.logs = []
+    def select_uploads(self):
+        host = self.client_host_edit.text()
+        port = self.client_port_edit.text()
 
-    def log(self, message):
-        self.logs.append(message)
-        self.model.setStringList(self.logs)
+        if not host or not port:
+            self.error("You must specify a host and port for uploading.")
+            return
 
-    def error(self, message):
-        self.logs.append(f'[ERR]: {message}')
-        self.model.setStringList(self.logs)
+        try:
+            int(port)
+        except ValueError:
+            self.error("You must specify a valid port for uploading.")
+            return
 
+        files, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            main_window,
+            "Select files to upload",
+            "",
+            "All Files (*.*)"
+        )
 
-def upload_files(host, port, parent=None, logger=None):
-    if not host or not port:
-        logger.error("Host and port are required")
-        return
+        if not files:
+            self.warn("No files selected")
+            return
 
-    try:
-        int(port)
-    except ValueError:
-        logger.error("Port must be an integer")
-        return
+        self.log(f"Selected {len(files)} file(s)")
+        self.log("Launching file transfer client...")
+        asyncio.run(self.launch_upload_client(host, port, files))
 
-    files, _ = QtWidgets.QFileDialog.getOpenFileNames(
-        parent,
-        "Select files to upload",
-        "",
-        "All Files (*.*)"
-    )
+    def select_dropbox_directory(self):
+        directory = QFileDialog.getExistingDirectory(
+            main_window,
+            "Select Dropbox Directory",
+            "",
+            QtWidgets.QFileDialog.Option.ShowDirsOnly
+        )
+        self.dropbox_edit.setText(directory)
 
-    if not files:
-        logger.error("No files selected")
-        return
+    async def launch_upload_client(self, host, port, files):
+        client = Client(self, host, port)
+        client.send_files(files)
 
-    logger.log(f"Connecting to {host}:{port}")
-    client = Client(host, port, logger)
-    client.send_files(files)
+    def toggle_server(self):
+        if self.server.running:
+            self.log("Stopping server...")
+            self.server.stop()
+            self.log("Stopped server")
+        else:
+            port = self.server_port_edit.text()
+            dropbox = self.dropbox_edit.text()
 
+            if not port or not dropbox:
+                self.error("You must specify a dropbox directory and port for listening.")
+                return
 
-def select_directory(parent=None):
-    directory = QtWidgets.QFileDialog.getExistingDirectory(
-        parent,
-        "Select Dropbox Directory",
-        "",
-        QtWidgets.QFileDialog.Option.ShowDirsOnly
-    )
-    return directory
+            try:
+                int(port)
+            except ValueError:
+                self.error("You must specify a valid port for listening.")
+                return
 
+            self.server.set_port(port)
+            self.server.set_dropbox(dropbox)
+            self.log(f"Starting server at port: {port} with dropbox: {dropbox}")
+            self.server.start()
+            self.log("Server started")
 
-def start_server(port, dropbox_dir, parent=None, logger=None):
-    if not port:
-        logger.error("Port is required")
-        return
-
-    try:
-        int(port)
-    except ValueError:
-        logger.error("Port must be an integer")
-        return
-
-    if not dropbox_dir:
-        logger.error("Dropbox directory is required")
-        return
-
-    if not os.path.exists(dropbox_dir):
-        logger.error("Dropbox directory does not exist")
-        return
-
-    server = Server(port, dropbox_dir, logger)
-    server.start()
-
-
-class Ui_MainWindow():
-    def setupUi(self, MainWindow):
-        MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(739, 985)
-        self.Central = QtWidgets.QWidget(parent=MainWindow)
-        self.Central.setObjectName("Central")
-        self.gridLayout = QtWidgets.QGridLayout(self.Central)
-        self.gridLayout.setObjectName("gridLayout")
-        self.tabs = QtWidgets.QTabWidget(parent=self.Central)
+    def setup_ui(self, main_window):
+        main_window.setObjectName("main_window")
+        main_window.resize(740, 985)
+        self.central = QtWidgets.QWidget(parent=main_window)
+        self.central.setObjectName("central")
+        self.grid_layout = QtWidgets.QGridLayout(self.central)
+        self.grid_layout.setObjectName("gridLayout")
+        self.tabs = QtWidgets.QTabWidget(parent=self.central)
         self.tabs.setMaximumSize(QtCore.QSize(300, 16777215))
         self.tabs.setObjectName("tabs")
-        self.client = QtWidgets.QWidget()
-        self.client.setObjectName("client")
-        self.gridLayoutWidget_2 = QtWidgets.QWidget(parent=self.client)
-        self.gridLayoutWidget_2.setGeometry(QtCore.QRect(0, 0, 291, 81))
-        self.gridLayoutWidget_2.setObjectName("gridLayoutWidget_2")
-        self.clientGrid = QtWidgets.QGridLayout(self.gridLayoutWidget_2)
-        self.clientGrid.setContentsMargins(0, 0, 0, 0)
-        self.clientGrid.setObjectName("clientGrid")
-        self.addressGrid = QtWidgets.QGridLayout()
-        self.addressGrid.setObjectName("addressGrid")
-        self.hostLabel = QtWidgets.QLabel(parent=self.gridLayoutWidget_2)
-        self.hostLabel.setObjectName("hostLabel")
-        self.addressGrid.addWidget(self.hostLabel, 1, 1, 1, 1)
-        self.hostEdit = QtWidgets.QLineEdit(parent=self.gridLayoutWidget_2)
-        self.hostEdit.setObjectName("hostEdit")
-        self.addressGrid.addWidget(self.hostEdit, 0, 1, 1, 1)
-        self.portLabel = QtWidgets.QLabel(parent=self.gridLayoutWidget_2)
-        self.portLabel.setObjectName("portLabel")
-        self.addressGrid.addWidget(self.portLabel, 1, 2, 1, 1)
-        self.portEdit = QtWidgets.QLineEdit(parent=self.gridLayoutWidget_2)
-        self.portEdit.setObjectName("portEdit")
-        self.addressGrid.addWidget(self.portEdit, 0, 2, 1, 1)
-        self.clientGrid.addLayout(self.addressGrid, 0, 0, 1, 1)
-        self.upload = QtWidgets.QPushButton(parent=self.gridLayoutWidget_2)
-        self.upload.setObjectName("upload")
-        self.clientGrid.addWidget(self.upload, 1, 0, 1, 1)
-        self.tabs.addTab(self.client, "")
-        self.server = QtWidgets.QWidget()
-        self.server.setObjectName("server")
-        self.gridLayoutWidget_4 = QtWidgets.QWidget(parent=self.server)
-        self.gridLayoutWidget_4.setGeometry(QtCore.QRect(0, 0, 291, 81))
-        self.gridLayoutWidget_4.setObjectName("gridLayoutWidget_4")
-        self.serverGrid = QtWidgets.QGridLayout(self.gridLayoutWidget_4)
-        self.serverGrid.setContentsMargins(0, 0, 0, 0)
-        self.serverGrid.setObjectName("serverGrid")
-        self.serverButton = QtWidgets.QPushButton(parent=self.gridLayoutWidget_4)
-        self.serverButton.setObjectName("serverButton")
-        self.serverGrid.addWidget(self.serverButton, 1, 0, 1, 1)
-        self.dropboxGrid = QtWidgets.QGridLayout()
-        self.dropboxGrid.setObjectName("dropboxGrid")
-        self.dropboxButton = QtWidgets.QPushButton(parent=self.gridLayoutWidget_4)
-        self.dropboxButton.setObjectName("dropboxButton")
-        self.dropboxGrid.addWidget(self.dropboxButton, 0, 1, 1, 1)
-        self.dropboxLabel = QtWidgets.QLabel(parent=self.gridLayoutWidget_4)
-        self.dropboxLabel.setObjectName("dropboxLabel")
-        self.dropboxGrid.addWidget(self.dropboxLabel, 1, 0, 1, 1)
-        self.dropboxEdit = QtWidgets.QLineEdit(parent=self.gridLayoutWidget_4)
-        self.dropboxEdit.setObjectName("dropboxEdit")
-        self.dropboxGrid.addWidget(self.dropboxEdit, 0, 0, 1, 1)
-        self.serverGrid.addLayout(self.dropboxGrid, 0, 0, 1, 1)
-        self.tabs.addTab(self.server, "")
-        self.gridLayout.addWidget(self.tabs, 0, 0, 1, 1)
-        self.logs = QtWidgets.QListView(parent=self.Central)
+        self.client_tab = QtWidgets.QWidget()
+        self.client_tab.setObjectName("client_tab")
+        self.client_grid_layout = QtWidgets.QWidget(parent=self.client_tab)
+        self.client_grid_layout.setGeometry(QtCore.QRect(0, 0, 291, 81))
+        self.client_grid_layout.setObjectName("client_grid_layout")
+        self.client_grid = QtWidgets.QGridLayout(self.client_grid_layout)
+        self.client_grid.setContentsMargins(0, 0, 0, 0)
+        self.client_grid.setObjectName("client_grid")
+        self.address_grid = QtWidgets.QGridLayout()
+        self.address_grid.setObjectName("address_grid")
+        self.client_port_label = QtWidgets.QLabel(parent=self.client_grid_layout)
+        self.client_port_label.setObjectName("client_port_label")
+        self.address_grid.addWidget(self.client_port_label, 1, 2, 1, 1)
+        self.client_host_edit = QtWidgets.QLineEdit(parent=self.client_grid_layout)
+        self.client_host_edit.setObjectName("client_host_edit")
+        self.address_grid.addWidget(self.client_host_edit, 0, 1, 1, 1)
+        self.client_port_edit = QtWidgets.QLineEdit(parent=self.client_grid_layout)
+        self.client_port_edit.setObjectName("client_port_edit")
+        self.address_grid.addWidget(self.client_port_edit, 0, 2, 1, 1)
+        self.client_host_label = QtWidgets.QLabel(parent=self.client_grid_layout)
+        self.client_host_label.setObjectName("client_host_label")
+        self.address_grid.addWidget(self.client_host_label, 1, 1, 1, 1)
+        self.client_grid.addLayout(self.address_grid, 0, 0, 1, 1)
+        self.upload_button = QtWidgets.QPushButton(parent=self.client_grid_layout)
+        self.upload_button.setObjectName("upload_button")
+        self.client_grid.addWidget(self.upload_button, 1, 0, 1, 1)
+        self.tabs.addTab(self.client_tab, "")
+        self.server_tab = QtWidgets.QWidget()
+        self.server_tab.setObjectName("server_tab")
+        self.server_grid_layout = QtWidgets.QWidget(parent=self.server_tab)
+        self.server_grid_layout.setGeometry(QtCore.QRect(0, 0, 291, 101))
+        self.server_grid_layout.setObjectName("server_grid_layout")
+        self.server_grid = QtWidgets.QGridLayout(self.server_grid_layout)
+        self.server_grid.setContentsMargins(0, 0, 0, 0)
+        self.server_grid.setObjectName("server_grid")
+        self.dropbox_grid = QtWidgets.QGridLayout()
+        self.dropbox_grid.setObjectName("dropbox_grid")
+        self.server_button = QtWidgets.QPushButton(parent=self.server_grid_layout)
+        self.server_button.setObjectName("serverButton")
+        self.dropbox_grid.addWidget(self.server_button, 2, 1, 1, 1)
+        self.server_port_edit = QtWidgets.QLineEdit(parent=self.server_grid_layout)
+        self.server_port_edit.setObjectName("server_port_edit")
+        self.dropbox_grid.addWidget(self.server_port_edit, 2, 0, 1, 1)
+        self.dropbox_label = QtWidgets.QLabel(parent=self.server_grid_layout)
+        self.dropbox_label.setObjectName("dropbox_label")
+        self.dropbox_grid.addWidget(self.dropbox_label, 1, 0, 1, 1)
+        self.dropbox_edit = QtWidgets.QLineEdit(parent=self.server_grid_layout)
+        self.dropbox_edit.setObjectName("dropbox_edit")
+        self.dropbox_grid.addWidget(self.dropbox_edit, 0, 0, 1, 1)
+        self.dropbox_button = QtWidgets.QPushButton(parent=self.server_grid_layout)
+        self.dropbox_button.setObjectName("dropbox_button")
+        self.dropbox_grid.addWidget(self.dropbox_button, 0, 1, 1, 1)
+        self.server_port_label = QtWidgets.QLabel(parent=self.server_grid_layout)
+        self.server_port_label.setObjectName("server_port_label")
+        self.dropbox_grid.addWidget(self.server_port_label, 3, 0, 1, 1)
+        self.server_grid.addLayout(self.dropbox_grid, 0, 1, 1, 1)
+        self.tabs.addTab(self.server_tab, "")
+        self.grid_layout.addWidget(self.tabs, 0, 0, 1, 1)
+        self.logs = QtWidgets.QListView(parent=self.central)
         self.logs.setObjectName("logs")
-        self.gridLayout.addWidget(self.logs, 0, 1, 1, 1)
-        MainWindow.setCentralWidget(self.Central)
+        self.grid_layout.addWidget(self.logs, 0, 1, 1, 1)
+        main_window.setCentralWidget(self.central)
+
+        self.translate_ui(main_window)
+        self.tabs.setCurrentIndex(0)
+        QtCore.QMetaObject.connectSlotsByName(main_window)
+
+    def translate_ui(self, main_window):
+        _translate = QtCore.QCoreApplication.translate
+        main_window.setWindowTitle(_translate("main_window", "File Transfer"))
+        self.client_port_label.setText(_translate("main_window", "Port"))
+        self.client_host_label.setText(_translate("main_window", "Host"))
+        self.upload_button.setText(_translate("main_window", "Upload files"))
+        self.tabs.setTabText(self.tabs.indexOf(self.client_tab), _translate("main_window", "Client"))
+        self.server_button.setText(_translate("main_window", "Start server"))
+        self.dropbox_label.setText(_translate("main_window", "Dropbox Directory"))
+        self.dropbox_button.setText(_translate("main_window", "Select Dropbox"))
+        self.server_port_label.setText(_translate("main_window", "Port"))
+        self.tabs.setTabText(self.tabs.indexOf(self.server_tab), _translate("main_window", "Server"))
+
+        # Logging
 
         self.logs_model = QtCore.QStringListModel()
         self.logs.setModel(self.logs_model)
-        self.logger = Logger(self.logs_model)
 
-        self.retranslateUi(MainWindow)
-        self.tabs.setCurrentIndex(0)
-        QtCore.QMetaObject.connectSlotsByName(MainWindow)
+        # Functionality
 
-    def retranslateUi(self, MainWindow):
-        _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "File Transfer"))
-        self.portLabel.setText(_translate("MainWindow", "Port"))
-        self.hostLabel.setText(_translate("MainWindow", "Host"))
-        self.upload.setText(_translate("MainWindow", "Upload files"))
-        self.upload.clicked.connect(
-            lambda: upload_files(
-                self.hostEdit.text(),
-                self.portEdit.text(),
-                MainWindow,
-                self.logger
-            )
-        )
-        self.tabs.setTabText(self.tabs.indexOf(self.client), _translate("MainWindow", "Client"))
-        self.serverButton.setText(_translate("MainWindow", "Start server"))
-        self.serverButton.clicked.connect(
-            lambda: start_server(
-                8040,
-                self.dropboxEdit.text(),
-                MainWindow,
-                self.logger
-            )
-        )
-        self.dropboxButton.setText(_translate("MainWindow", "Select Dropbox"))
-        self.dropboxButton.clicked.connect(
-            lambda: self.dropboxEdit.setText(select_directory(MainWindow))
-        )
-        self.dropboxLabel.setText(_translate("MainWindow", "Dropbox Directory"))
-        self.tabs.setTabText(self.tabs.indexOf(self.server), _translate("MainWindow", "Server"))
+        self.upload_button.clicked.connect(lambda: self.select_uploads())
+        self.dropbox_button.clicked.connect(lambda: self.select_dropbox_directory())
+        self.server_button.clicked.connect(lambda: self.toggle_server())
 
+    def log(self, message):
+        self.internal_logs.append(message)
+        self.logs_model.setStringList(self.internal_logs)
+
+    def warn(self, message):
+        self.internal_logs.append("[WARN]: " + message)
+        self.logs_model.setStringList(self.internal_logs)
+
+    def error(self, message):
+        self.internal_logs.append("[ERR]: " + message)
+        self.logs_model.setStringList(self.internal_logs)
 
 if __name__ == "__main__":
+    import sys
     app = QtWidgets.QApplication(sys.argv)
-    MainWindow = QtWidgets.QMainWindow()
-    ui = Ui_MainWindow()
-    ui.setupUi(MainWindow)
-    MainWindow.show()
+    main_window = QtWidgets.QMainWindow()
+    ui = ui_main_window()
+    ui.setup_ui(main_window)
+    main_window.show()
     sys.exit(app.exec())
