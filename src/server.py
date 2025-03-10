@@ -76,9 +76,10 @@ class Server:
 
         try:
             while True:
-                header = (await reader.read(BUFFER_SIZE).decode())
+                header_bytes = await reader.read(BUFFER_SIZE)
+                header = header_bytes.decode()
 
-                if header == "DONE":
+                if not header or header.strip() == "DONE":
                     log("File transfer complete")
                     break
 
