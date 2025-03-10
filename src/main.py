@@ -82,6 +82,7 @@ class ui_main_window(object):
             self.log("Stopping server...")
             self.server.stop()
             self.log("Stopped server")
+            self.server_button.setText("Start server")
         else:
             port = self.server_port_edit.text()
             dropbox = self.dropbox_edit.text()
@@ -101,7 +102,7 @@ class ui_main_window(object):
             self.log(f"Starting server at port: {port} with dropbox: {dropbox}")
             self.server.start()
             self.log("Server started")
-
+            self.server_button.setText("Stop server")
     def setup_ui(self, main_window):
         main_window.setObjectName("main_window")
         main_window.resize(740, 985)

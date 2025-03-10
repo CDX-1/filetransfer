@@ -2,6 +2,7 @@ import os
 import asyncio
 import threading
 import socket
+from concurrent.futures import CancelledError
 
 BUFFER_SIZE = 4096
 SEPARATOR = "<SEPARATOR>"
@@ -26,6 +27,8 @@ class Server:
         self.running = False
         self.server = None
         self.loop = None
+        self.server_task = None
+        self.shutdown_event = None
 
     def set_port(self, port):
         if self.running:
@@ -41,42 +44,102 @@ class Server:
         try:
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
+            self.shutdown_event = asyncio.Event()
 
             server_thread = threading.Thread(
-                target=lambda: self.loop.run_until_complete(self.run_server())
+                target=self._run_server_thread
             )
             server_thread.start()
         except Exception as e:
             self.main.error(str(e))
 
-    def stop(self):
+    def _run_server_thread(self):
+        try:
+            self.server_task = self.loop.create_task(self.run_server())
+            self.loop.run_forever()
+        except Exception as e:
+            self.main.error(f"Server thread error: {str(e)}")
+        finally:
+            try:
+                # Cancel any pending tasks
+                pending = asyncio.all_tasks(self.loop)
+                for task in pending:
+                    task.cancel()
+                
+                # Wait for all tasks to complete with a timeout
+                if pending:
+                    self.loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                
+                self.server_task = None
+                self.server = None
+                self.loop.close()
+            except Exception:
+                pass
+
+    async def stop_server(self):
         self.running = False
-        if self.loop:
-            self.loop.call_soon_threadsafe(self.loop.stop)
+        
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
+            
+        if self.server_task and not self.server_task.done():
+            self.server_task.cancel()
+            try:
+                await self.server_task
+            except asyncio.CancelledError:
+                pass
+
+    def stop(self):
+        if not self.running or not self.loop:
+            return
+
+        async def _stop():
+            await self.stop_server()
+            self.loop.stop()
+
+        try:
+            future = asyncio.run_coroutine_threadsafe(_stop(), self.loop)
+            future.result(timeout=5)  # Wait up to 5 seconds for shutdown
+        except Exception as e:
+            self.main.error(f"Error during shutdown: {str(e)}")
+        finally:
+            self.running = False
 
     async def run_server(self):
-        self.server = await asyncio.start_server(
-            self.handle_client,
-            "",
-            self.port
-        )
+        try:
+            self.server = await asyncio.start_server(
+                self.handle_client,
+                "",
+                self.port
+            )
 
-        ip = get_local_ip()
-        self.main.log(f"Server listening at {ip}:{self.port}")
-        self.running = True
+            ip = get_local_ip()
+            self.main.log(f"Server listening at {ip}:{self.port}")
+            self.running = True
 
-        async with self.server:
-            await self.server.serve_forever()
+            async with self.server:
+                await self.server.serve_forever()
+        except asyncio.CancelledError:
+            self.main.log("Server shutdown initiated")
+        except Exception as e:
+            self.main.error(f"Server error: {str(e)}")
+        finally:
+            self.running = False
+            self.main.log("Server stopped")
 
     async def read_line(self, reader):
         line = bytearray()
         while True:
-            byte = await reader.read(1)
-            if not byte:  # EOF
+            try:
+                byte = await reader.read(1)
+                if not byte: # EOF
+                    return None
+                if byte == b'\n':
+                    break
+                line.extend(byte)
+            except asyncio.CancelledError:
                 return None
-            if byte == b'\n':
-                break
-            line.extend(byte)
         return line.decode()
 
     async def handle_client(self, reader, writer):
@@ -108,11 +171,15 @@ class Server:
                     with open(filepath, "wb") as f:
                         while bytes_received < filesize:
                             chunk_size = min(BUFFER_SIZE, filesize - bytes_received)
-                            data = await reader.read(chunk_size)
-                            if not data:
-                                break
-                            f.write(data)
-                            bytes_received += len(data)
+                            try:
+                                data = await reader.read(chunk_size)
+                                if not data:
+                                    break
+                                f.write(data)
+                                bytes_received += len(data)
+                            except asyncio.CancelledError:
+                                log("Transfer cancelled")
+                                return
 
                     end_marker = await self.read_line(reader)
                     if end_marker != END_OF_FILE:
@@ -124,8 +191,13 @@ class Server:
                     log(f"Error processing file: {str(e)}")
                     continue
 
+        except asyncio.CancelledError:
+            log("Connection cancelled due to server shutdown")
         except Exception as e:
             log(f"Error occurred: {str(e)}")
         finally:
-            writer.close()
-            await writer.wait_closed()
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except:
+                pass
