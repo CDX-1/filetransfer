@@ -4,6 +4,7 @@ import os
 BUFFER_SIZE = 4096
 SEPARATOR = "<SEPARATOR>"
 END_OF_FILE = "<END_OF_FILE>"
+CONNECT_TIMEOUT = 3 # seconds
 
 class Client:
     def __init__(self, main, host, port):
@@ -13,7 +14,20 @@ class Client:
 
     def send_files(self, files):
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(CONNECT_TIMEOUT)
+            
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            if hasattr(socket, 'TCP_KEEPIDLE'):  # Linux
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 1)
+            elif hasattr(socket, 'TCP_KEEPALIVE'):  # macOS
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 1)
+            if hasattr(socket, 'TCP_KEEPINTVL'):
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
+            if hasattr(socket, 'TCP_KEEPCNT'):
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 2)
+
+            try:
                 s.connect((self.host, self.port))
                 self.main.log(f"Connected to {self.host}:{self.port}")
 
@@ -42,6 +56,10 @@ class Client:
 
                 s.sendall("DONE\n".encode())
                 self.main.log(f"Successfully uploaded {count}/{len(files)} files")
+            finally:
+                s.close()
+        except socket.timeout:
+            self.main.error(f"Connection to {self.host}:{self.port} timed out after {CONNECT_TIMEOUT} seconds")
         except ConnectionRefusedError:
             self.main.error(f"Failed to connect to {self.host}:{self.port}")
         except Exception as e:
