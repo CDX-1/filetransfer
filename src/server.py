@@ -5,6 +5,7 @@ import socket
 
 BUFFER_SIZE = 4096
 SEPARATOR = "<SEPARATOR>"
+END_OF_FILE = "<END_OF_FILE>"
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -38,11 +39,11 @@ class Server:
 
     def start(self):
         try:
-            self.loop = asyncio.get_event_loop()
+            self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
 
             server_thread = threading.Thread(
-                target = lambda: self.loop.run_until_complete(self.run_server())
+                target=lambda: self.loop.run_until_complete(self.run_server())
             )
             server_thread.start()
         except Exception as e:
@@ -51,7 +52,7 @@ class Server:
     def stop(self):
         self.running = False
         if self.loop:
-            self.loop.call_soon_threadsafe(self.loop.stop())
+            self.loop.call_soon_threadsafe(self.loop.stop)
 
     async def run_server(self):
         self.server = await asyncio.start_server(
@@ -67,6 +68,18 @@ class Server:
         async with self.server:
             await self.server.serve_forever()
 
+    async def read_line(self, reader):
+        """Read a line ending with \n"""
+        line = bytearray()
+        while True:
+            byte = await reader.read(1)
+            if not byte:  # EOF
+                return None
+            if byte == b'\n':
+                break
+            line.extend(byte)
+        return line.decode()
+
     async def handle_client(self, reader, writer):
         addr = writer.get_extra_info('peername')
         self.main.log(f"Connection from {addr}")
@@ -76,31 +89,46 @@ class Server:
 
         try:
             while True:
-                header_bytes = await reader.read(BUFFER_SIZE)
-                header = header_bytes.decode()
-
-                if not header or header.strip() == "DONE":
-                    log("File transfer complete")
+                # Read header line
+                header = await self.read_line(reader)
+                if not header:
+                    log("Connection closed")
+                    break
+                    
+                if header == "DONE":
+                    log("All files received")
                     break
 
-                filename, filesize = header.strip().split(SEPARATOR)
-                filesize = int(filesize)
+                try:
+                    filename, filesize = header.strip().split(SEPARATOR)
+                    filesize = int(filesize)
+                    log(f"Receiving {filename} ({filesize} bytes)")
 
-                filepath = os.path.join(self.dropbox, filename)
-
-                with open(filepath, "wb") as f:
+                    filepath = os.path.join(self.dropbox, filename)
                     bytes_received = 0
-                    while bytes_received < filesize:
-                        bytes_read = await reader.read(BUFFER_SIZE)
-                        if not bytes_read:
-                            break
-                        f.write(bytes_read)
-                        bytes_received += len(bytes_read)
 
-                log(f"Received {filename} ({filesize} B)")
+                    with open(filepath, "wb") as f:
+                        while bytes_received < filesize:
+                            chunk_size = min(BUFFER_SIZE, filesize - bytes_received)
+                            data = await reader.read(chunk_size)
+                            if not data:
+                                break
+                            f.write(data)
+                            bytes_received += len(data)
+
+                    # Read the end of file marker
+                    end_marker = await self.read_line(reader)
+                    if end_marker != END_OF_FILE:
+                        raise ValueError(f"Expected end of file marker, got: {end_marker}")
+
+                    log(f"Received {filename} successfully")
+
+                except ValueError as e:
+                    log(f"Error processing file: {str(e)}")
+                    continue
+
         except Exception as e:
-            log("Error occurred")
-            self.main.error(str(e))
+            log(f"Error occurred: {str(e)}")
         finally:
             writer.close()
             await writer.wait_closed()
