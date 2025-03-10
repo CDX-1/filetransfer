@@ -103,6 +103,7 @@ class ui_main_window(object):
             self.server.start()
             self.log("Server started")
             self.server_button.setText("Stop server")
+            
     def setup_ui(self, main_window):
         main_window.setObjectName("main_window")
         main_window.resize(740, 985)
