@@ -2,7 +2,6 @@ import os
 import asyncio
 import threading
 import socket
-from concurrent.futures import CancelledError
 
 BUFFER_SIZE = 4096
 SEPARATOR = "<SEPARATOR>"
@@ -61,12 +60,10 @@ class Server:
             self.main.error(f"Server thread error: {str(e)}")
         finally:
             try:
-                # Cancel any pending tasks
                 pending = asyncio.all_tasks(self.loop)
                 for task in pending:
                     task.cancel()
-                
-                # Wait for all tasks to complete with a timeout
+
                 if pending:
                     self.loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
                 
@@ -100,7 +97,7 @@ class Server:
 
         try:
             future = asyncio.run_coroutine_threadsafe(_stop(), self.loop)
-            future.result(timeout=5)  # Wait up to 5 seconds for shutdown
+            future.result(timeout=5) # Wait up to 5 seconds for shutdown
         except Exception as e:
             self.main.error(f"Error during shutdown: {str(e)}")
         finally:
