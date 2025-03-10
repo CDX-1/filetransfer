@@ -2,8 +2,8 @@ from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtWidgets import QFileDialog
 import asyncio
 
-from src.client import Client
-from src.server import Server
+from client import Client
+from server import Server
 
 # User interface generated using Qt Designer
 class ui_main_window(object):

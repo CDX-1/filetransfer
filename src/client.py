@@ -8,7 +8,7 @@ class Client:
     def __init__(self, main, host, port):
         self.main = main
         self.host = host
-        self.port = port
+        self.port = int(port)
 
     def send_files(self, files):
         try:

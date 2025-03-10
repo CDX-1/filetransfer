@@ -29,7 +29,7 @@ class Server:
     def set_port(self, port):
         if self.running:
             return
-        self.port = port
+        self.port = int(port)
 
     def set_dropbox(self, dropbox):
         if self.running:
