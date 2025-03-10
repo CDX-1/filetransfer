@@ -26,24 +26,20 @@ class Client:
                     filesize = os.path.getsize(path)
                     filename = os.path.basename(path)
 
-                    # Send header with newline to separate from file content
                     header = f"{filename}{SEPARATOR}{filesize}\n"
                     s.sendall(header.encode())
 
-                    # Send file content
                     with open(path, "rb") as f:
                         while True:
                             bytes_read = f.read(BUFFER_SIZE)
                             if not bytes_read:
                                 break
                             s.sendall(bytes_read)
-                    
-                    # Send end of file marker
+
                     s.sendall(END_OF_FILE.encode() + b"\n")
                     count += 1
                     self.main.log(f"Sent {filename}")
 
-                # Send final DONE message
                 s.sendall("DONE\n".encode())
                 self.main.log(f"Successfully uploaded {count}/{len(files)} files")
         except ConnectionRefusedError:

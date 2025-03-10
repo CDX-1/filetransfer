@@ -69,7 +69,6 @@ class Server:
             await self.server.serve_forever()
 
     async def read_line(self, reader):
-        """Read a line ending with \n"""
         line = bytearray()
         while True:
             byte = await reader.read(1)
@@ -81,15 +80,14 @@ class Server:
         return line.decode()
 
     async def handle_client(self, reader, writer):
-        addr = writer.get_extra_info('peername')
-        self.main.log(f"Connection from {addr}")
+        ip, port = writer.get_extra_info('peername')
+        self.main.log(f"Connection from {ip}:{port}")
 
         def log(message):
-            self.main.log(f"[{addr}]: {message}")
+            self.main.log(f"[{ip}:{port}]: {message}")
 
         try:
             while True:
-                # Read header line
                 header = await self.read_line(reader)
                 if not header:
                     log("Connection closed")
@@ -102,7 +100,7 @@ class Server:
                 try:
                     filename, filesize = header.strip().split(SEPARATOR)
                     filesize = int(filesize)
-                    log(f"Receiving {filename} ({filesize} bytes)")
+                    log(f"Receiving {filename} ({filesize} B)")
 
                     filepath = os.path.join(self.dropbox, filename)
                     bytes_received = 0
@@ -116,7 +114,6 @@ class Server:
                             f.write(data)
                             bytes_received += len(data)
 
-                    # Read the end of file marker
                     end_marker = await self.read_line(reader)
                     if end_marker != END_OF_FILE:
                         raise ValueError(f"Expected end of file marker, got: {end_marker}")
